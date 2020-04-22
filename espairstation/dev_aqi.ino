@@ -24,6 +24,7 @@ boolean isExpired(byte station, time_t now) {
 // https://www.airnow.gov/sites/default/files/2018-05/aqi-technical-assistance-document-may2016.pdf
 const float AQI[] = { -1, 50, 100, 150, 200, 300, 500 };
 const float PM25[] = { -0.1, 12.0, 35.4, 55.4, 150.4, 250.4, 500.4 };
+const float CAQIPM25[] = { 0, 15, 30, 55, 110, 500 };
 
 byte getStepwiseLinearCat(float value, const float *thresholds) {
   byte cat = 0;
@@ -39,12 +40,17 @@ float mean(float v1, float v2) {
 
 float getStepwiseLinearCatPos(float value, const float *thresholds) {
   byte cat = getStepwiseLinearCat(value, thresholds);
-  // are we in the higher or the lower half of the current category...
-//  byte higherCat = cat + (value >= mean(thresholds[cat] - thresholds[0], thresholds[cat + 1]));
-  // take the two category means..
+  // category mean = half-way between lower and lower bound
+  float catMean = mean(thresholds[cat] - thresholds[0], thresholds[cat + 1] - thresholds[0]);
+    // add/subtract some (up to 0.5) but don't go below 0
+  return max(0.0f, cat + (value - catMean) / (thresholds[cat + 1] - thresholds[cat]));
+  // are we in the higher or the lower half of the current category?
+//  if (value >= catMean) {
+  // alternative strategy: don't do +- 0.5 around category mean, but straight linear interpolation
+  // between each pair of means
 //  float higherMean = mean(thresholds[higherCat] - thresholds[0], thresholds[higherCat + 1]);
 //  float lowerMean = mean(thresholds[higherCat - 1] - thresholds[0], thresholds[higherCat]);
-  return cat + 1 - (thresholds[cat + 1] - value) / (thresholds[cat + 1] - thresholds[cat]);
+//  float progressIntoHigherCategory = (thresholds[higherCat] - value) / (thresholds[higherCat] - thresholds[higherCat - 1]);
 }
 
 float aqiToPM25(int aqi) {
@@ -151,6 +157,7 @@ void renderAQI() {
       usedStations++;
     }
   }
+  display.setFont(ucg_font_fur17_hf);
   display.setColor(0, 0, 0);
   display.drawBox(0, 128 - 16, display.getWidth(), 16);
   if (usedStations == 0) {
@@ -160,12 +167,14 @@ void renderAQI() {
   Serial.printf("PM25 average over %d stations is %.1fug/m3.\n", usedStations, pm25);
 
   // interpolate color between the two adjacent aqi categories
-  setAqiColor(getStepwiseLinearCatPos(pm25, PM25));
+  Serial.println(getStepwiseLinearCatPos(pm25, CAQIPM25));
+  setCAQIColor(getStepwiseLinearCatPos(pm25, CAQIPM25));
   // until AQI 150 (=PM25 55) one aqi index is < 1ug PM25, at 150 it switches to ~2mg per 1 aqi
   // so until 100ug we can render a formatted float, after we can just round to int
   byte decimals = pm25 < 100 ? 1 : 0;
   byte x = 8;
-  x += display.drawString(0, 128 - 16, 0, formatFloat(pm25, 2, decimals));
-  display.drawString(x, 128 - 16, 0, "ug/m3");
+  byte y = 16 + 90;
+  x += display.drawString(0, y, 0, formatFloat(pm25, 2, decimals));
+  display.drawString(x, y, 0, "ug/m3");
   // greek mu is 0x6d in ucg_font_symb12/14/18/24_tr
 }

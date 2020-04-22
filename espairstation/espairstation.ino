@@ -111,13 +111,15 @@ enum Location {
   NumberOfSites
 };
 
-TempAndHumidity data[NumberOfSites];
+#define INVALID_DATA -3.4028235E+38
+const TempAndHumidity INVALID_PAIR = { INVALID_DATA, INVALID_DATA };
+TempAndHumidity data[NumberOfSites] = { INVALID_PAIR, INVALID_PAIR, INVALID_PAIR };
 
-void render() {
-  for (byte i = 0; i < NumberOfSites; i++) {
-    render(i);
-  }
-}
+//void render() {
+//  for (byte i = 0; i < NumberOfSites; i++) {
+//    render(i);
+//  }
+//}
 
 char formatted[5];
 char* formatFloat(float value, byte minimumWidth, byte decimals) {
@@ -138,9 +140,11 @@ void render(byte location) {
 //  display.setColor(3, 0, 255, 255);
 //  display.drawGradientBox(0, 0, display.getWidth(), display.getHeight());
 
+  display.setFont(ucg_font_fur17_hf);
   display.setPrintDir(0);
 
-  byte y = 16 + 32 * location;
+  // 30 px per line
+  byte y = 16 + 30 * location;
 
   display.setColor(100, 100, 110);
   if (location == HERE) {
@@ -162,6 +166,13 @@ void render(byte location) {
   setComfortColor(data[location].temperature, data[location].humidity);
   display.print((byte) data[location].humidity);
   display.print("%");
+
+  // render uptime
+  display.setColor(64, 64, 64);
+  display.setFont(ucg_font_courR08_mr);
+  x = display.drawString(0, 120, 0, "uptime: ");
+  display.setPrintPos(x, 120);
+  display.print(millis() / 60000); // in minutes
 }
 
 void getData() {
@@ -177,6 +188,7 @@ void getAQI();
 // trivial
 void getLocalSensor() {
   data[HERE] = dht.getTempAndHumidity();
+  // TODO if (dht.getStatus() != ERROR_NONE) ...
 }
 
 void getData(byte location) {
@@ -188,10 +200,14 @@ void getData(byte location) {
   render(location);
 }
 
+#define ONEMINUTE 60000
+#define POLLEVERY 5
+
 void loop() {
-  // poll every 5 minutes = 300 seconds
-//  delay(300000);
-  delay(300000);
+  for (byte i = 0; i < POLLEVERY; i++) {
+    getData(HERE);
+    delay(ONEMINUTE);
+  }
   Serial.println("-------------------------");
   connectWifi();
   getData();

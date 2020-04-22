@@ -1,62 +1,104 @@
 #include <ESPMiio.h>
-IPAddress device_ip(192, 168, 1, 4);
-MiioDevice device(&device_ip, MIIOTOKEN, 1000);
+
+#define TIMEOUT 500
+
+// this is just the default IP, if no device is found there it will scan the local network
+IPAddress *ip = new IPAddress(192, 168, 1, 4);
+MiioDevice *device = new MiioDevice(ip, MIIOTOKEN, TIMEOUT);
 
 void sendCommand(String command, String jsonArgs) {
   sendCommand(command, jsonArgs, NULL);
 }
 
 void sendCommand(String command, String jsonArgs, void (*callback)(JsonVariant result)) {
+  sendCommand(command, jsonArgs, callback, NULL);
+}
+
+void sendCommand(String command, String jsonArgs, void (*callback)(JsonVariant result), void (*errorCallback)(byte errorCode)) {
   if (!checkDevice()) {
     return; // fail
   }
   Serial.print("Sending " + command + " " + jsonArgs + "...");
-  if (device.isBusy()) {
-    Serial.println("waiting once...");
-    delay(1000);
+  for (byte waits = 0; waits < 10; waits++) {
+    if (device->isBusy()) {
+      Serial.print("waiting...");
+      delay(100);
+    } else {
+      break;
+    }
   }
-  if (device.send(command.c_str(), jsonArgs.c_str(),
-      [&](MiioResponse response) {
+  if (device->send(command.c_str(), jsonArgs.c_str(),
+      [callback, command, jsonArgs](MiioResponse response) {
         Serial.println("Response to " + command + " " + jsonArgs + ": " + response.getResult().as<String>());
         if (callback != NULL) {
           callback(response.getResult());
         }
-      },
-      [&](MiioError e){
-        Serial.printf("Command error: %d\n", e);
-      })) {
-      Serial.println("sent.");
+      }, errorCallback)) {
+    Serial.println("sent.");
   } else {
     Serial.println("failed.");
     // TODO invalidate data...
   }
-  delay(500); // 300 is sometimes dodge...for setting values especially!?
 }
 
 volatile byte requiresSetup = false;
 
-void connectDevice() {
-  if (device.isBusy()) {
+void findDevice() {
+  IPAddress local = WiFi.localIP();
+
+  // scan through the local network IP range to discover a MiIo device
+  for (byte i = 2; i < 10; i++) {
+    if (i == local[3]) {
+      continue; // don't try to connect to yourself
+    }
+    delete device;
+    delete ip;
+    ip = new IPAddress(local[0], local[1], local[2], i);
+    Serial.print("Trying ");
+    Serial.print(*ip);
+    Serial.print("...");
+    device = new MiioDevice(ip, MIIOTOKEN, TIMEOUT);
+
+    device->connect();
+
+    // leave AT LEAST 150ms for a reliable connection
+    delay(TIMEOUT);
+    if (device->isConnected()) {
+      Serial.println("found!");
+      break;
+    } else {
+      Serial.println("unavailable");
+    }
+  }
+}
+
+bool connectDevice() {
+  if (device->isBusy()) {
     delay(500);
     Serial.print("...");
   }
-  device.connect([](MiioError e) {
-    Serial.printf("Connection error: %s\n", e);
+  device->connect([](MiioError e) {
+    Serial.println(e);
   });
   // await connection
   delay(1000);
+  if (!device->isConnected()) {
+    Serial.println("failed to connect, initiating scan.");
+    findDevice();
+  }
 }
 
 //volatile bool awaitingResponse = false;
 
 bool checkDevice() {
 //  Serial.println(device == NULL);
-  if (device.isConnected()) {
+  if (device->isConnected()) {
     if (requiresSetup) {
       Serial.println("Setting up device...");
       requiresSetup = false;
       sendCommand("SetTipSound_Status", "0");
       sendCommand("SetLedState", "0");
+      // this one always breaks....
       sendCommand("Set_OnOff", "1");
       // Set_HumiValue and Set_HumidifierGears will be called by adjustHumidifer()...
     }
@@ -67,29 +109,10 @@ bool checkDevice() {
 //    device = &dev;
   connectDevice();
 
-  if (device.isConnected()) {
+  if (device->isConnected()) {
     Serial.println("connected.");
   } else {
-    // hmmmm...
-    byte i = 2;
-    while (i < 10) {
-//      IPAddress device_ip(WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], i);
-//      device_ip[3] = i;
-//      MiioDevice dev(&device_ip, MIIOTOKEN, 1000);
-//      device = &dev;
-      Serial.printf("Trying %d.%d.%d.%d...", device_ip[0], device_ip[1], device_ip[2], device_ip[3]);
-      connectDevice();
-      if (device.isConnected()) {
-        Serial.println("connected!");
-        break;
-      } else {
-        Serial.println("no luck.");
-      }
-      i++;
-    }
-    if (!device.isConnected()) {
-      return false;
-    }
+    return false;
   }
 
   sendCommand("get_prop", "\"Led_State\"", [](JsonVariant result) {
@@ -110,20 +133,24 @@ byte gearState;
 void getDeviceData() {
   sendCommand("get_prop", "\"Humidity_Value\"", [](JsonVariant result) {
     data[NEAR].humidity = result.as<int>();
+  }, [](byte error) {
+    data[NEAR].humidity = INVALID_DATA;
   });
   sendCommand("get_prop", "\"TemperatureValue\"", [](JsonVariant result) {
     data[NEAR].temperature = result.as<int>();
+  }, [](byte error) {
+    data[NEAR].temperature = INVALID_DATA;
   });
   sendCommand("get_prop", "\"Humidifier_Gear\"", [](JsonVariant result) {
     gearState = result.as<byte>();
   });
 
   // this isn't nice, but what is...
-  delay(1000);
+  delay(TIMEOUT);
   render(NEAR);
   adjustHumidifier();
   Serial.println("Disconnecting.");
-  device.disconnect();
+  device->disconnect();
 }
 
 void adjustHumidifier() {
@@ -148,5 +175,4 @@ void adjustHumidifier() {
     sendCommand("Set_HumidifierGears", "4");
   }
   sendCommand("Set_HumiValue", String(humidity));
-//  sendCommand("Set_OnOff", "1");
 }
