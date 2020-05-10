@@ -68,10 +68,19 @@ SD1? / D1  |  8 | display DC
 
 Wasted too much time getting the display to work with various libraries:
 
-* eventually settled on [ucglib](https://github.com/olikraus/ucglib/wiki) (150 stars, 54 forks) because it worked out of the box, and has great default fonts that are easy peasy to include, great documentation. Only downside is no image/bitmap support?
-* `lcdgfx` works, super customizable but font selection/support seemed too cumbersome to get started quickly, doxygen docs are a bit of a pain to navigate/understand
-* adafruit `libglx`/ssd1351 has great printing functions but stupid issue with ESP8266, skips every second line or so!?? Tried both hardware and software SPI, there are some strange `#ifdef` clauses in the library that bypass some constructors for the ESP8266, so gave up on it...
-* Another potential option I never actually tried out: [FTOLED](https://github.com/freetronics/FTOLED/wiki/Function-Reference) (27 stars, 15 forks)
+         | ESP-32 | Wemos D1 R1 | D1 Mini | general notes
+-------- | ------ | ----------- | ------- | -------------
+[`ucglib`](https://github.com/olikraus/ucglib/wiki) |        | OK          | reboots during GraphicsTest | (150 stars, 54 forks) worked out of the box, has great default fonts that are easy peasy to include, great documentation. Only downside is no built-in image/bitmap support?
+`lcdgfx` (and `ssd1306`) |        | works | skips 4 pixel lines in the middle of the display | works, super customizable but font selection/support seemed too cumbersome to get started quickly, doxygen docs are a bit of a pain to navigate/understand
+Adafruit `ssd1351` | | artefacts | artefacts | skips every second line on the ESP8266 using both hardware and software SPI. There are some strange `#ifdef` clauses in the library that bypass some constructors for the ESP8266, so gave up on it...
+[FTOLED](https://github.com/freetronics/FTOLED/wiki/Function-Reference) | | |
+[`OLED_eSPI`])https://github.com/MagicCube/OLED_eSPI) | | | not working | fork of TFT_eSPI
+
+Next steps/salvaging: because the code (or rather the display) I worked on for the Uno-sized D1 does not port to the D1 mini I need to pursue one of two other options:
+
+1. use a SSD1331-based 64px display instead (on the D1 mini)
+2. use the same display but on a ESP32 board
+3. run on one of the NodeMCUs instead (what was wrong with them again?)
 
 ### SR-501 PIR sensor
 
@@ -128,3 +137,28 @@ Laboratory experiment comparisons:
 ### display colors
 
 The American EPA AQI colours used on [aqicn.org](http://aqicn.org/) are kind of horrible for blending between, already the first change from green to yellow is just way too abrupt. Nicer to use the more gradual colour scheme of the [European CAQI classes](https://en.wikipedia.org/wiki/Air_quality_index#CAQI).
+
+### Icons
+
+OpenWeatherMap uses 9 different icons: https://openweathermap.org/weather-conditions
+But pretty difficult to find 16x16 alternatives, especially in colour?
+u8g2 weather icon fonts: https://github.com/olikraus/u8g2/wiki/fntgrpiconic#open_iconic_weather_2x
+
+https://nucleoapp.com/icons/weather
+
+
+## D1 Mini shields
+
+ | RST | TX | PMS #1 RX (HW)
+free | A0 | RX | PMS #1 TX (HW)
+PMS #2 TX (SW) | D0 | D1 | OLED shield SCL
+SD shield CLK | D5 | D2 | OLED shield SDA
+SD shield MISO | D6 | D3 | free
+SD shield MOSI | D7 | D4 | SD shield CS (/`Serial1` HW TX for debug msg)
+PMS #2 RX (SW) | D8 | GND |
+
+## PMS7003 libraries
+
+PMSSerial (`PMSerial.h`) takes a Serial object for HW and has SoftwareSerial 'built-in', is always in pass has an OLED example sketch and is also nicely blocking.
+
+PMS Library (`PMS.h`) takes a Serial object as argument and has methods for turning on/off passive mode but does not block...

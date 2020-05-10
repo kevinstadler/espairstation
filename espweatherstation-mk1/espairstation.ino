@@ -1,12 +1,12 @@
 //// WIFI ////
 #include <ESP8266WiFi.h>
-#define AP_SSID "FILL IN HERE"
-#define AP_PASSWORD "FILL IN HERE"
+#define AP_SSID "CU_DQsd"
+#define AP_PASSWORD "xh6ctzf3"
 
-// Longquan, Dongfeng square, Jindingshan, Biji square
+// Jindingshan, Biji square, Longquan, Dongfeng square
 #define N_AQISTATIONS 4
-const String AQISTATIONS[] = { "@1380", "@1381", "@1382", "@1383" };
-#define AQICNTOKEN "FILL IN HERE"
+const String AQISTATIONS[] = { "@1382", "@1383", "@1380", "@1381" };
+#define AQICNTOKEN "7ef04af09a2a93a67569a5c774a03c617e99103e"
 
 #include <SPI.h>
 #include "Ucglib.h"
@@ -22,14 +22,19 @@ DHTesp dht;
 
 #include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
-#define MIIOTOKEN "FILL IN HERE"
+#define MIIOTOKEN "789aa908daf3e6942ab4592d8eebd88d"
 
 #define MOTION_PIN D3
 volatile unsigned long lastMotion;
 
+bool shouldDisplayBeOn() {
+  return digitalRead(MOTION_PIN) == HIGH;
+}
+
 void ICACHE_RAM_ATTR motionDetectorInterrupt() {
-  if (digitalRead(MOTION_PIN) == HIGH) {
+  if (shouldDisplayBeOn()) {
     display.powerUp();
+    // TODO draw everything here?
   } else {
     display.powerDown();
     Serial.printf("Turning display off after %d seconds.\n", (millis() - lastMotion) / 1000);
@@ -56,12 +61,9 @@ void setup() {
   Serial.begin(115200);
   Serial.println("");
 
-  display.begin(UCG_FONT_MODE_SOLID);
+  display.begin(UCG_FONT_MODE_TRANSPARENT);
   display.clearScreen();
-//  display.setFont(ucg_font_ncenR14_hr);
-//  display.setFont(ucg_font_fub20_hf);
-  // free universal regular/bold
-  // transp/mono/height/8x8 + full/reduced/numbers
+  display.setFontPosCenter();
   // RED, YELLOW, GREEN, CYAN, BLUE, MAGENTA, BLACK, WHITE
   const byte barWidth = display.getWidth() / 8;
   const byte barHeight = display.getHeight();
@@ -81,12 +83,6 @@ void setup() {
   display.drawBox(6 * barWidth, 0, barWidth, barHeight);
   display.setColor(255, 255, 255);
   display.drawBox(7 * barWidth, 0, barWidth, barHeight);
-
-//  display.setFont(ucg_font_helvR24_tf); // helvetica
-//  display.setFont(ucg_font_fur20_hf);
-  display.setFont(ucg_font_fur17_hf);
-  // alternatives: inconsolate ucg_font_inr*_
-  display.setFontPosCenter();
 
   lastMotion = millis();
   dht.setup(DHT_PIN, DHTesp::DHT22);
@@ -115,70 +111,11 @@ enum Location {
 const TempAndHumidity INVALID_PAIR = { INVALID_DATA, INVALID_DATA };
 TempAndHumidity data[NumberOfSites] = { INVALID_PAIR, INVALID_PAIR, INVALID_PAIR };
 
-//void render() {
-//  for (byte i = 0; i < NumberOfSites; i++) {
-//    render(i);
-//  }
-//}
-
-char formatted[5];
-char* formatFloat(float value, byte minimumWidth, byte decimals) {
-  // stringLength < 6
-  return dtostrf(value, minimumWidth, decimals, formatted);
-}
-char* formatFloat(float value, byte decimals) {
-  return formatFloat(value, 0, decimals);
-}
-char* formatFloat(float value) {
-  return formatFloat(value, 0, 0);
-}
-
-void render(byte location) {
-//  display.setColor(0, 0, 40, 80);
-//  display.setColor(1, 80, 0, 40);
-//  display.setColor(2, 255, 0, 255);
-//  display.setColor(3, 0, 255, 255);
-//  display.drawGradientBox(0, 0, display.getWidth(), display.getHeight());
-
-  display.setFont(ucg_font_fur17_hf);
-  display.setPrintDir(0);
-
-  // 30 px per line
-  byte y = 16 + 30 * location;
-
-  display.setColor(100, 100, 110);
-  if (location == HERE) {
-    display.drawString(0, y, 0, "h:");
-  } else if (location == NEAR) {
-    display.drawString(0, y, 0, "x:");
-  } else {
-    display.drawString(0, y, 0, "o:");
-  }
-  byte x = 30;
-
-  setTemperatureColor(data[location].temperature);
-//  display.setColor(255, 168, 0);
-  x += display.drawString(x, y, 0, formatFloat(data[location].temperature, 1, 0));
-  display.drawGlyph(x, y, 0, 0xb0); // degree sign
-
-  x = 72;
-  display.setPrintPos(x, y);
-  setComfortColor(data[location].temperature, data[location].humidity);
-  display.print((byte) data[location].humidity);
-  display.print("%");
-
-  // render uptime
-  display.setColor(64, 64, 64);
-  display.setFont(ucg_font_courR08_mr);
-  x = display.drawString(0, 120, 0, "uptime: ");
-  display.setPrintPos(x, 120);
-  display.print(millis() / 60000); // in minutes
-}
-
 void getData() {
   for (byte i = 0; i < NumberOfSites; i++) {
     getData(i);
   }
+//  getWeather();
 }
 
 // see miio.ino
@@ -197,7 +134,9 @@ void getData(byte location) {
     case NEAR: getDeviceData(); break;
     case HERE: getLocalSensor(); break;
   }
-  render(location);
+//  if (shouldDisplayBeOn()) {
+    draw(location);
+//  }
 }
 
 #define ONEMINUTE 60000

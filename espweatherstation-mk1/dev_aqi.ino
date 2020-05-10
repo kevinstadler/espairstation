@@ -2,8 +2,11 @@
 #include <NTPClient.h>
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
+HTTPClient http;
 
-float pm25s[N_AQISTATIONS];
+#define N_AQIHISTORY 9
+float pm25s[N_AQISTATIONS][N_AQIHISTORY];
+byte latestData[N_AQISTATIONS];
 time_t syncTimes[N_AQISTATIONS];
 
 boolean isExpired(byte station, time_t now) {
@@ -64,10 +67,10 @@ float aqiToPM25(int aqi) {
 }
 
 void invalidateStation(byte station) {
-  pm25s[station] = -1;
+  pm25s[station][latestData[station]] = -1;
 }
 
-void getAQI(byte station, HTTPClient &http, DynamicJsonDocument &doc) {
+void getAQI(byte station, DynamicJsonDocument &doc) {
   Serial.print("Querying AQI station " + AQISTATIONS[station] + "...");
   http.begin("http://api.waqi.info/feed/" + AQISTATIONS[station] + "/?token=" + AQICNTOKEN);
   if (http.GET() != 200) {
@@ -100,9 +103,10 @@ void getAQI(byte station, HTTPClient &http, DynamicJsonDocument &doc) {
     syncTimes[station] = tm;
   }
 //        String dp = response["dominentpol"].as<String>();
+  latestData[station] = (latestData[station] + 1) % N_AQIHISTORY;
   response = response["iaqi"];
-  pm25s[station] = aqiToPM25(response["pm25"]["v"].as<int>());
-  Serial.printf("%d AQI is %.1fug/m3 PM2.5...", response["pm25"]["v"].as<int>(), pm25s[station]);
+  pm25s[station][latestData[station]] = aqiToPM25(response["pm25"]["v"].as<int>());
+  Serial.printf("%d AQI is %.1fug/m3 PM2.5...", response["pm25"]["v"].as<int>(), pm25s[station][latestData[station]]);
   // weather data is city-wide, so just take latest from whichever station
   data[OUT].temperature = response["t"]["v"].as<int>();
   data[OUT].humidity = response["h"]["v"].as<int>();
@@ -130,51 +134,17 @@ void getAQI() {
       return;
     }
   }
-  // if we're here there's at least one expired station...
 
-  HTTPClient http;
+  // if we're here there's at least one expired station...
   DynamicJsonDocument doc(2000);
   while (station < N_AQISTATIONS) {
     if (isExpired(station, now)) {
-      getAQI(station, http, doc);
+      getAQI(station, doc);
     }
     station++;
   }
   http.end();
-  renderAQI();
   // add five minutes
   now += 300;
 //  Serial.printf("Next poll will be at around :%s\n", (timeClient.getMinutes() + 5) % 60);
-}
-
-void renderAQI() {
-  // average over all available station data
-  byte usedStations = 0;
-  float pm25 = 0;
-  for (byte i = 0; i < N_AQISTATIONS; i++) {
-    if (pm25s[i] >= 0) {
-      pm25 += pm25s[i];
-      usedStations++;
-    }
-  }
-  display.setFont(ucg_font_fur17_hf);
-  display.setColor(0, 0, 0);
-  display.drawBox(0, 128 - 16, display.getWidth(), 16);
-  if (usedStations == 0) {
-    return;
-  }
-  pm25 = pm25 / usedStations;
-  Serial.printf("PM25 average over %d stations is %.1fug/m3.\n", usedStations, pm25);
-
-  // interpolate color between the two adjacent aqi categories
-  Serial.println(getStepwiseLinearCatPos(pm25, CAQIPM25));
-  setCAQIColor(getStepwiseLinearCatPos(pm25, CAQIPM25));
-  // until AQI 150 (=PM25 55) one aqi index is < 1ug PM25, at 150 it switches to ~2mg per 1 aqi
-  // so until 100ug we can render a formatted float, after we can just round to int
-  byte decimals = pm25 < 100 ? 1 : 0;
-  byte x = 8;
-  byte y = 16 + 90;
-  x += display.drawString(0, y, 0, formatFloat(pm25, 2, decimals));
-  display.drawString(x, y, 0, "ug/m3");
-  // greek mu is 0x6d in ucg_font_symb12/14/18/24_tr
 }
