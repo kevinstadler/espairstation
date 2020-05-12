@@ -1,6 +1,6 @@
 #include <ESPMiio.h>
 // leave AT LEAST 150ms for a reliable connection, sometimes even 500 is not enough...
-#define TIMEOUT 750
+#define TIMEOUT 1500
 
 AirData humidifierData = INVALID_AIRDATA;
 
@@ -31,7 +31,7 @@ void findDevice() {
 
     device = createMiioDevice();
     device->connect();
-    delay(TIMEOUT);
+    delay(1000);
     if (device->isConnected()) {
       Serial.println("found!");
       break;
@@ -45,46 +45,56 @@ bool connectDevice();
 bool sendCommand(String command, String jsonArgs, void (*callback)(JsonVariant result), void (*errorCallback)(byte errorCode));
 
 bool sendCommand(String command, String jsonArgs, void (*callback)(JsonVariant result)) {
-  return sendCommand(command, jsonArgs, callback, [](byte error) {
-    Serial.printf("Miio command error: %d\n", error);
-  });
+  return sendCommand(command, jsonArgs, callback, NULL);
 }
 
 bool sendCommand(String command, String jsonArgs) {
   return sendCommand(command, jsonArgs, NULL);
 }
 
-//volatile byte awaitingResponse = false;
+volatile bool awaitingResponse = false;
 bool sendCommand(String command, String jsonArgs, void (*callback)(JsonVariant result), void (*errorCallback)(byte errorCode)) {
   if (!connectDevice()) {
     Serial.println("ERROR: did not send command because no device connected.");
     return false;
   }
   Serial.print("Sending " + command + " " + jsonArgs + "...");
-  for (byte waits = 0; waits < 10; waits++) {
-    if (device->isBusy()) {
-      Serial.print("waiting...");
-      delay(100);
-    } else {
-      break;
+  byte waits = 0;
+  while (device->isBusy()) {
+    if (waits >= 20) {
+      Serial.println("ERROR: failed to send command because UDP device is busy");
+      return false;
     }
+    Serial.print("waiting...");
+    delay(200);
+    waits++;
   }
-  if (device->isBusy()) {
-    Serial.println("ERROR: failed to send command because UDP device is busy");
-    return false;
-  }
-  bool sent = device->send(command.c_str(), jsonArgs.c_str(),
-      [callback, command, jsonArgs](MiioResponse response) {
-        Serial.println("Response to " + command + " " + jsonArgs + ": " + response.getResult().as<String>() + ".");
+  awaitingResponse = true;
+  if (device->send(command.c_str(), jsonArgs.c_str(),
+      [command, jsonArgs, callback](MiioResponse response) {
+        awaitingResponse = false;
+        Serial.println("response: " + response.getResult().as<String>() + ".");
         if (callback != NULL) {
           callback(response.getResult());
         }
-      }, errorCallback);
-  Serial.println(sent ? "sent." : "failed.");
-  if (sent) {
-    delay(400); // modest wait
-  }
-  return sent;
+      }, [errorCallback](byte error) {
+        awaitingResponse = false;
+        Serial.printf("command error: %d\n", error);
+        if (errorCallback != NULL) {
+          errorCallback(error);
+        }
+      })) {
+      Serial.print("sent, awaiting response..");
+      while (awaitingResponse) {
+        Serial.print(".");
+        delay(200);
+      }
+      return true;
+    } else {
+      Serial.println("failed.");
+      awaitingResponse = false;
+      return false;
+    }
 }
 
 bool initializeHumidifier() {
@@ -107,17 +117,23 @@ bool connectDevice() {
     delay(500);
     Serial.print("busy...");
   }
+  awaitingResponse = true;
   device->connect([](MiioError e) {
-    Serial.printf("failed: connection error %d...", e);
+    awaitingResponse = false;
+    Serial.printf("failed (error %d)...", e);
   });
   // await connection
-  delay(TIMEOUT);
-  if (!device->isConnected()) {
+  while (awaitingResponse) {
+    Serial.print(".");
+    delay(200);
+  }
+  if (device->isConnected()) {
+    Serial.println("connected.");
+  } else {
     Serial.println("not connected, initiating scan.");
     findDevice();
   }
   if (device->isConnected()) {
-    Serial.println("connected.");
     sendCommand("get_prop", "\"Led_State\"", [](JsonVariant result) {
       if (result.as<int>() != 0) {
         Serial.println("Device looks uninitiated, queueing setup.");

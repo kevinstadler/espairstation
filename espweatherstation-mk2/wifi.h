@@ -13,7 +13,8 @@ boolean connectWifi() {
     Serial.println("connected.");
     return true;
   } else {
-    Serial.printf("failed! Wifi Status: %d\n", WiFi.status());
+    Serial.printf("failed! Wifi Status: %d, disconnecting.\n", WiFi.status());
+    WiFi.disconnect();
     return false;
   }
 }
@@ -39,8 +40,10 @@ bool updateCurrentTime() {
 bool hasOneHourExpired(unsigned long since) {
   if (since >= now) {
     // NTP seriously out of date...
+    Serial.println("NTP seems seriously out of date, setting to value obtained from JSON...");
     now = since;
     return true;
   }
+  Serial.printf("Checking timestamp: data is %d minutes old.\n", now - since);
   return since + 60 * 60 < now;
 }

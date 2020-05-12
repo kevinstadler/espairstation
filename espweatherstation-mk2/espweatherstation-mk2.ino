@@ -66,9 +66,12 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(AP_SSID, AP_PASSWORD);
   if (connectWifi()) {
+    updateCurrentTime();
     getWeather();
     getAQI();
     getHumidifierData();
+  } else {
+    display.fillRect(93, 61, 3, 3, RED);
   }
 
   Serial.print("Attaching motion detector interrupt...");
@@ -82,6 +85,7 @@ void setup() {
 
 void loop() {
   if (connectWifi()) {
+    display.fillRect(93, 61, 3, 3, BLACK);
     if (!updateCurrentTime()) {
       Serial.println("Manually adding time to the system clock...");
       now += LOOPDELAY;
@@ -94,7 +98,8 @@ void loop() {
     getAQI();
     delay(LOOPDELAY);
   } else {
-    Serial.println("Not connected to wifi, waiting...");
+    display.fillRect(93, 61, 3, 3, RED);
+    Serial.println("Not connected to wifi, waiting for one minute...");
     now += ONEMINUTE;
     delay(ONEMINUTE);
   }

@@ -7,6 +7,7 @@ DynamicJsonDocument doc(26000);
 JsonVariant getJSON(String url, bool reuse = false) {
   doc.clear();
   HTTPClient http;
+  http.setTimeout(10000);
   http.begin(url);//, "EEAA586D4F1F42F4185B7FB0F20A4CDD97477D99");
   int get = http.GET();
   if (get != 200) {

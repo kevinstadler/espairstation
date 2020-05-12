@@ -14,7 +14,7 @@ uint16_t ADAColor(uint32_t rgb) {
 #define VERYDRY ADAColor(0xBBB3A6)
 #define DRY ADAColor(0xAAAA66)
 #define VERYCOMFY ADAColor(0x00E300) // this one's a bit shrill...
-#define COMFY ADAColor(0xBBFF66)
+#define COMFY ADAColor(0xBBFF66) // that's a dull yellowish green, ok for humidity, not for temperature
 #define OK ADAColor(0xFAFF8F)
 #define YELLOWISH ADAColor(0xFFDD00)
 #define ORANGE ADAColor(0xFF9900)
@@ -23,7 +23,7 @@ uint16_t ADAColor(uint32_t rgb) {
 #define MOON ADAColor(0xD0D0D0)
 #define LIGHTCLOUD ADAColor(0x999999)
 #define DARKCLOUD ADAColor(0x555555)
-#define RAIN ADAColor(0x0044FF)
+#define RAINDROPS ADAColor(0x0044FF)
 
 uint16_t getColor(float value, const float *thresholds, const uint16_t *colors) {
   return colors[getStepwiseLinearCat(value, thresholds)];
