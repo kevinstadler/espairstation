@@ -1,13 +1,13 @@
 #include <ESPMiio.h>
 // leave AT LEAST 150ms for a reliable connection, sometimes even 500 is not enough...
-#define TIMEOUT 1500
+#define TIMEOUT 1000
 
 AirData humidifierData = INVALID_AIRDATA;
 
 bool tankEmpty = false;
 
 // this is just the default IP, if no device is found there it will scan the local network
-IPAddress *ip = new IPAddress(192, 168, 1, 4);
+IPAddress *ip = new IPAddress(192, 168, 1, 2);
 
 MiioDevice* createMiioDevice() {
   return new MiioDevice(ip, MIIO_TOKEN, TIMEOUT);
@@ -18,7 +18,8 @@ void findDevice() {
   IPAddress local = WiFi.localIP();
 
   // scan through the local network IP range to discover a MiIo device
-  for (byte i = 2; i < 11; i++) {
+  for (byte i = 2; i < 3; i++) {
+//  for (byte i = 2; i < 11; i++) {
     if (i == local[3]) {
       continue; // don't try to connect to yourself
     }
@@ -52,7 +53,11 @@ bool sendCommand(String command, String jsonArgs) {
   return sendCommand(command, jsonArgs, NULL);
 }
 
-volatile bool awaitingResponse = false;
+// see ESPMiio.h
+const String MIIO_ERRORSTRING[5] = { "not connected", "timeout", "busy", "invalid response", "message creation failed" };
+
+// 0 == waiting, 1 == OK, 2 == error
+volatile byte responseStatus = 1;
 bool sendCommand(String command, String jsonArgs, void (*callback)(JsonVariant result), void (*errorCallback)(byte errorCode)) {
   if (!connectDevice()) {
     Serial.println("ERROR: did not send command because no device connected.");
@@ -69,30 +74,30 @@ bool sendCommand(String command, String jsonArgs, void (*callback)(JsonVariant r
     delay(200);
     waits++;
   }
-  awaitingResponse = true;
+  responseStatus = 0;
   if (device->send(command.c_str(), jsonArgs.c_str(),
       [command, jsonArgs, callback](MiioResponse response) {
-        awaitingResponse = false;
+        responseStatus = 1;
         Serial.println("response: " + response.getResult().as<String>() + ".");
         if (callback != NULL) {
           callback(response.getResult());
         }
       }, [errorCallback](byte error) {
-        awaitingResponse = false;
-        Serial.printf("command error: %d\n", error);
+        responseStatus = 2;
+        Serial.println("error: " + MIIO_ERRORSTRING[error]);
         if (errorCallback != NULL) {
           errorCallback(error);
         }
       })) {
       Serial.print("sent, awaiting response..");
-      while (awaitingResponse) {
+      while (responseStatus == 0) {
         Serial.print(".");
         delay(200);
       }
-      return true;
+      delay(200); // one more for good measure...
+      return responseStatus != 2;
     } else {
       Serial.println("failed.");
-      awaitingResponse = false;
       return false;
     }
 }
@@ -114,16 +119,16 @@ bool connectDevice() {
   Serial.print("Connecting to Miio device...");
 
   if (device->isBusy()) {
-    delay(500);
     Serial.print("busy...");
+    delay(500);
   }
-  awaitingResponse = true;
+  responseStatus = 0;
   device->connect([](MiioError e) {
-    awaitingResponse = false;
+    responseStatus = 2;
     Serial.printf("failed (error %d)...", e);
   });
   // await connection
-  while (awaitingResponse) {
+  while (!device->isConnected() && responseStatus == 0) {
     Serial.print(".");
     delay(200);
   }
@@ -191,17 +196,21 @@ void getHumidifierData() {
   if (!sendCommand("get_prop", "\"Humidity_Value\"", [](JsonVariant result) {
     humidifierData.humidity = result.as<int>();
   })) {
-    humidifierData = INVALID_AIRDATA;
-    return;
+    Serial.println("Invalidating device humidity.");
+    humidifierData.humidity = INVALID_DATA;
   }
-  sendCommand("get_prop", "\"TemperatureValue\"", [](JsonVariant result) {
+  if (!sendCommand("get_prop", "\"TemperatureValue\"", [](JsonVariant result) {
     humidifierData.temperature = result.as<int>();
-  });
-  delay(TIMEOUT);
+  })) {
+    Serial.println("Invalidating device temperature.");
+    humidifierData.temperature = INVALID_DATA;
+  }
 
   if (isValid(calculateDewPoint(humidifierData))) {
     adjustHumidifier();
   }
+  Serial.println("Disconnecting device.");
+  device->disconnect();
 
   drawLocalData();
 }

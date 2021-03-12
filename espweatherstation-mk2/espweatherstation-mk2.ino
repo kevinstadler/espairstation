@@ -1,8 +1,10 @@
 #define ONEMINUTE 60000
-#define LOOPDELAY 5*ONEMINUTE // do something every 5 minutes
+#define LOOPDELAY 10*ONEMINUTE // do something every x minutes
 
-#define AP_SSID "CU_DQsd"
-#define AP_PASSWORD "xh6ctzf3"
+//#define AP_SSID "CU_DQsd"
+//#define AP_PASSWORD "xh6ctzf3"
+#define AP_SSID "CMCC-iqVH"
+#define AP_PASSWORD "k4vpan6q"
 #include "wifi.h"
 #include "math.h"
 

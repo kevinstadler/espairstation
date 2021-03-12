@@ -42,7 +42,6 @@ bool drawDewPointMarker(float dewPoint, String label, byte y) {
   return drawDewPointMarker(dewPoint, label, y, false);
 }
 
-
 void drawLocalData() {
   display.fillRect(0, 19, 96, 24, BLACK);
 

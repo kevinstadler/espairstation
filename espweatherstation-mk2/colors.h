@@ -21,8 +21,8 @@ uint16_t ADAColor(uint32_t rgb) {
 #define DARKORANGE ADAColor(0xFF5500)
 
 #define MOON ADAColor(0xD0D0D0)
-#define LIGHTCLOUD ADAColor(0x999999)
-#define DARKCLOUD ADAColor(0x555555)
+#define LIGHTCLOUD ADAColor(0x888888)
+#define DARKCLOUD ADAColor(0x444444)
 #define RAINDROPS ADAColor(0x0044FF)
 
 uint16_t getColor(float value, const float *thresholds, const uint16_t *colors) {

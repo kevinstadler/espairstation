@@ -1,92 +1,110 @@
 ## espairstation
 
-ESP8266/ESP32 that displays air temperature/humidity/pollution data from local and remote sensors.
+Several ESP8266/ESP32 Arduino projects for collecting and displaying air temperature/humidity/pollution data from local and remote sensors.
 
-Connected sensors:
+Sub-projects and corresponding hardware:
 
-* SSD1351-based 128x128px RGB OLED display 
-* SR-501 PIR sensor for dynamically turning the screen on/off
-* DHT22 temperature/humidity sensor for local temperature/humidity
-* reads/controls a Xiaomi device over MiIo for nearby temperature/humidity data
-* gathers data from the [AQICN](http://aqicn.org) JSON API for remote pollution/temperature/humidity data
+* `sloganstation` (aka `espweatherstation-mk3`) -- expanded version of `mk2` that uses a `NeoMatrix` display
+  * local
+    * NeoMatrix LED
+    * TEMT6000 for automatic dimming (see [AniMatrix](https://github.com/kevinstadler/AniMatrix))
+    * PIR sensor triggers screen wake (on time/sleep is fixed, not dependent on PIR going down)
+    * SHT30 shield for local temperature/humidity
+  * network
+    * MiIO humidifier for reading temperature/humidity data and controlling device state
+    * [OpenAQ](https://openaq.org) JSON API for outdoor pollution data (raw)
+    * AccuWeather/OpenWeatherMap for outdoor measurements + forecasting
+* `espweatherstation-mk2`
+  * local
+    * SSD1351-based 128x128px RGB OLED display 
+    * SR-501 PIR sensor for dynamically turning the screen on/off (based on SR-501's hardware time setting)
+    * DHT22 temperature/humidity sensor for local temperature/humidity
+  * network
+    * MiIO humidifier for reading temperature/humidity data and controlling device state
+    * [AQICN](http://aqicn.org) JSON API for outdoor pollution (reconstructed)/temperature/humidity data
+* `espweatherstation-mk1`
+  * original code, abandoned in favour of `mk2`
+* `pm25fancontrol` turns a MiIO smart plug on/off based on local (and outside) PM2.5 concentration readings
+  * local
+    * Plantower PMS5003
+    * RGB led (ground/pwm-controlled)
+    * TEMT6000 for LED brightness dimming?
+    * PIR sensor for waking (turning led on/off)
+  * network
+    * MiIO smart plug
+    * outside PM25 readings
+* `PIRtest` for testing/comparing PIR sensor sensitivity
+  * local
+    * SR-501 sensitivity/time/trigger-adjustable PIR sensor
+    * ? PIR sensor
+    * SR-602 PIR sensor
+    * `8x32` MAX7219 LED (https://www.makerguides.com/max7219-led-dot-matrix-display-arduino-tutorial/)
+* `PortablePM25Screen` reads and graphs PM2.5 concentrations on a 64x48 pixel OLED shield
+  * PMS5003 sensor (uses fu-hsi's `PMS.h`)
+  * D1 Mini [OLED 0.66" shield](https://www.wemos.cc/en/latest/d1_mini_shield/oled_0_66.html)
+    * this display was a pain to get running as most libraries are written for the 128x64 pixel version, `SSD1306Wire` library worked in the end but with funny pixel offsets
+* `pmserialx2` reads PM2.5 concentration from 2 connected sensors for comparison (at some point I also wrote them to SPIFFS for plotting+comparison, wonder where that code went...)
+  * 2 PMS5003 sensors (uses the always-blocking ``PMserial.h``)
+* [`srtNeoMatrix`](https://github.com/kevinstadler/srtNeoMatrix) (dedicated repository): displays subtitles from a .srt file read from SPIFFS on a NeoMatrix in real time
+  * NeoMatrix
+  * TEMT6000 for automatic dimming (see [AniMatrix](https://github.com/kevinstadler/AniMatrix))
 
-The display (128x128px RGB) can choose to show any of the following data items:
+## Hardware
 
-* outdoor temperature (degrees) & humidity (%)
-* outdoor PM2.5 particle levels (ug/m3, typical range from 0 to 200, one decimal point available)
-* temperature & humidity at the device itself
-* temperature & humidity at the humidifier in the room next door
-* the humidity level that the humidifier is currently set to
+### Micro-controller chips
 
-Optional informative color coding for each of the measures (such as currently shown on the display):
+* Wemos D1 Mini (ESP8266): great little chip, compact, but requires soldering. [Lots of great shields](https://www.wemos.cc/en/latest/d1_mini_shield/index.html) available for it but 'stacked' female pins can lead to unstable connections.
+  * definite pin usage reference: https://randomnerdtutorials.com/esp8266-pinout-reference-gpios/
+* LoL1n NodeMCU 1.0 (ESP-12E): nice dev board but can only flash at 115200 baud (SLOW) and something about non-standard crystal frequencies etc makes serial output garbled/unusable (see esp8266/Arduino#4005)
 
-* temperature: blended/mixed colours along the scale *white - blue - green - orange - red* to signify *freezing - cold - comfortable - hot*
-* humidity: blended/mixed colours along a scale such as https://www.mrfixitbali.com/images/articleimages/dew-point-chart-compact.jpg to signify *dry - comfortable - muggy - horrible*
-* air quality: blended/mixed colours along the [CAQI](https://en.wikipedia.org/wiki/Air_quality_index#CAQI) *green - yellow - orange - red* scale
+### NeoMatrix display
 
-### TODOs
+https://learn.adafruit.com/adafruit-neopixel-uberguide/best-practices
 
-* add local PM2.5 particle sensor to measure effects of any particle filters running indoors!
-* improve error handling (Wifi disconnect)
+* does not light up without a 1000mA cap
+* unlike stated elsewhere, controlling the 5V powered matrix from the 3.3V ESP8266 works fine without the need for a logic level converter
 
-### Pins/wiring
+### PM2.5 sensors
 
-#### Available pins on the ESP8266
+All laser-based, 5V power, 3.3V logic level devices communicating via Serial.
 
-Pins are for a Wemos D1 Wifi:
+* [Plantower PMS 7003](https://www.espruino.com/datasheets/PMS7003.pdf) +-10ug accuracy, 100mA usage, .2mA standby, has a sleep pin but does not provide 3.3V out. ([Arduino driver],(https://www.espruino.com/PMS7003), [AQICN review](https://aqicn.org/sensor/pms5003-7003/), [Plantower product website](http://www.plantower.com/list/?6_1.html): 7003M model has fan+exhaust at the top, normal/P/I modals 90 opposed on the side?)
+  * also found a (slightly) cheaper copy of the Plantower with the exact same specs/protocol, labelled *G7*
+* [Honeywell HPMA115SO-XXX](https://sensing.honeywell.com/honeywell-sensing-particulate-hpm-series-datasheet-32322550) +-15ug accuracy, 600mA surge voltage, 80mA usage, 20mA standby, has a 3.3V 100mA output pin.... ([Arduino driver](https://github.com/felixgalindo/HPMA115S0))
 
-pin(s)  | GPIO | use
-------- | ---- | ---
-D0      |  3 | (in use: RX)
-D1      |  1 | (in use: TX)
-D2      | 16 | DHT22 (sensor)
-D3, D15 |  5 | PIR (detector)
-D4, D14 |  4 | 
-D5, D13 | 14 | SPI clock (display)
-D6, D12 | 12 | display RESET
-D7, D11 | 13 | SPI MOSI (display)
-D8      |  0 | display DC
-D9      |  2 | (in use: LED_BUILTIN)
-D10     | 15 | SPI SS (display CS)
-A0    | ADC0 |
+Laboratory experiment comparisons:
 
-#### Available pins on the ESP32
+* https://uwspace.uwaterloo.ca/bitstream/handle/10012/12776/Tan_Ben.pdf?sequence=5&isAllowed=y
 
-Hardware SPI (bus SPI2)
+#### PMS\*003 libraries
 
-pin(s)  | GPIO | use
-------- | ---- | ---
- | 14 | SPI clock (display)
- | 12 | display RESET
- | 13 | SPI MOSI (display)
-SD1? / D1  |  8 | display DC
-      |  2 | (in use: LED_BUILTIN)
-     | 15 | SPI SS (display CS)
+* PMSSerial (`PMSerial.h`) takes a Serial object for HW and has SoftwareSerial 'built-in', is always in passive mode(?), has an OLED example sketch, read commands are generally blocking.
 
+* fu-hsi's [PMS Library](https://github.com/fu-hsi/PMS) (`PMS.h`) takes a Serial object as argument and has methods for turning on/off passive mode and provides both blocking and non-blocking methods. Because the library uses blocking calls sparingly there is an issue [using the library with SoftwareSerial](https://github.com/fu-hsi/PMS/issues/14) where it is sometimes necessary to manually `flush()` the software serial port before executing a command, otherwise it might not be transmitted properly (`AltSoftSerial` and `NeoSWSerial` don't have this problem, but neither are supported on the ESP8266).
 
-### SSD1351 libraries
+### PIR sensors
 
-Wasted too much time getting the display to work with various libraries:
-
-         | ESP-32 | Wemos D1 R1 | D1 Mini | general notes
--------- | ------ | ----------- | ------- | -------------
-[`ucglib`](https://github.com/olikraus/ucglib/wiki) |        | OK          | reboots during GraphicsTest | (150 stars, 54 forks) worked out of the box, has great default fonts that are easy peasy to include, great documentation. Only downside is no built-in image/bitmap support?
-`lcdgfx` (and `ssd1306`) |        | works | skips 4 pixel lines in the middle of the display | works, super customizable but font selection/support seemed too cumbersome to get started quickly, doxygen docs are a bit of a pain to navigate/understand
-Adafruit `ssd1351` | | artefacts | artefacts | skips every second line on the ESP8266 using both hardware and software SPI. There are some strange `#ifdef` clauses in the library that bypass some constructors for the ESP8266, so gave up on it...
-[FTOLED](https://github.com/freetronics/FTOLED/wiki/Function-Reference) | | |
-[`OLED_eSPI`])https://github.com/MagicCube/OLED_eSPI) | | | not working | fork of TFT_eSPI
-
-Next steps/salvaging: because the code (or rather the display) I worked on for the Uno-sized D1 does not port to the D1 mini I need to pursue one of two other options:
-
-1. use a SSD1331-based 64px display instead (on the D1 mini)
-2. use the same display but on a ESP32 board
-3. run on one of the NodeMCUs instead (what was wrong with them again?)
-
-### SR-501 PIR sensor
+### SR-501 (nice chunky fresnel lens)
 
 Setting the jumper to "repeat trigger" and the delay quite high (15+ seconds) allows you to control the screen (powerUp/powerDown) via a `CHANGE` interrupt on the data pin. The sensor takes about a minute to adjust to baseline lighting, so only attach the interrupt at the end of the `setup()` return after waiting for about a minute.
 
-### DHT22 temperature/humidity sensor
+All other sensors have a fixed sensitivity and trigger `HIGH` for 1-2 sec before going `LOW` again for at least 5 sec.
+
+### AM-312
+
+spec says 100deg angle, 3-5 meter range, lense smaller than on SR-501 but seems to work very similar to SR-501 on highest-sensitivity and lowest timer setting
+
+### SR-602
+
+The small and clunky lens makes it useless except for narrow spaces or close-up detection. Never figured out what the extra 'photosensitivity' pins are good for.
+
+### temperature/humidity sensors
+
+#### SHT30
+
+MUCH smaller than DHT sensors, also available as a super flat [D1 Mini shield](https://www.wemos.cc/en/latest/d1_mini_shield/sht30.html) (pins `D1` and `D2` for I2C, addresses `0x44` and `0x45`).
+
+#### DHT22
 
 Is constantly reading data when it's only required to update every 5 minutes or so, maybe possible to supply voltage via one of the digital Pins?
 
@@ -97,42 +115,33 @@ TODO: need to figure out consumption of the DHT22 and the maximum current draw f
 
 ### MiIo / how to get your MiIO token
 
-<!-- deerma-humidifier-mjjsq_miapEB50 -->
+The easiest way to extract current tokens for all your connected MiIO/Xiaomi Home devices is this python script, which simply uses your MiHome login data to query the Xiaomi Cloud API for tokens: https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor
 
-My device model is a Xiaomi Humidifier 2(?) aka `deerma.humidifier.mjjsq`. For access I used ar2rus' experimental [ESPMiIO](https://github.com/ar2rus/ESPMiIO/) library with some modifications (see my [fork](https://github.com/kevinstadler/ESPMiIO/)).
+For testing/debugging/figuring out commands for MiIO devices the best command seems to be [python-miio](https://github.com/rytilahti/python-miio) (use the --debug option to inspect the underlying JSON of each implemented command).
 
-For obtaining the MiIo token required to connect to the device I followed https://github.com/Maxmudjon/com.xiaomi-miio/blob/master/docs/obtain_token.md but none of the elegant methods worked: Arduino backup was a pain, [even with setting a backup desktop password](https://android.stackexchange.com/questions/116439/adb-backup-command-on-non-rooted-device-creates-an-empty-backup-file) it just didn't work, the auto-token obtained via the `miio` command line tool would also expire after connecting the device to Wifi, so ended up installing the verbosely logging Xiaomi Home version instead.
+For communicating with the devices on Arduino I used ar2rus' experimental [ESPMiIO](https://github.com/ar2rus/ESPMiIO/) library with some modifications (see my [fork](https://github.com/kevinstadler/ESPMiIO/)).
 
-### AQICN JSON API
+<!-- My device model is a Xiaomi Humidifier 2(?) aka `deerma.humidifier.mjjsq`. -->
+
+~~For obtaining the MiIo token required to connect to the device I followed https://github.com/Maxmudjon/com.xiaomi-miio/blob/master/docs/obtain_token.md but none of the elegant methods worked: Arduino backup was a pain, [even with setting a backup desktop password](https://android.stackexchange.com/questions/116439/adb-backup-command-on-non-rooted-device-creates-an-empty-backup-file) it just didn't work, the auto-token obtained via the `miio` command line tool would also expire after connecting the device to Wifi, so ended up installing the verbosely logging Xiaomi Home version instead.~~
+
+### AQI sources
+
+#### aqicn.com/WAQI JSON API
+
+Up-to-date but only gives EPA-standardised air quality indices and only for the current time (no history/backlog)
 
 See [hackster.io: ESP8266 AQI Display](https://www.hackster.io/arkhan/esp8266-aqi-display-25bba7)
 
-### Scheduling updates
+#### OpenAQ JSON API
 
-* humidifier status every 10 minutes?
-* local sensor every 10 minutes?
-* AQI every 10 minutes?
+No weather data but otherwise much better, raw measurements, also up to date and no API key needed
 
-TODO which library/timer to use to schedule updates?
+https://openaq.org
 
-* expiration-based: https://circuits4you.com/2018/01/02/esp8266-timer-ticker-example/
+#### [pm25.in](http://www.pm25.in)
 
-ntp/time-based
-
-* https://lastminuteengineers.com/esp8266-ntp-server-date-time-tutorial/
-* https://forum.arduino.cc/index.php?topic=608549.0
-* Uses https://github.com/jhagberg/ESP8266TimeAlarms
-
-### PM2.5 sensors
-
-All laser-based, 5V power, 3.3V logic level devices communicating via Serial.
-
-* [Plantower PMS 7003](https://www.espruino.com/datasheets/PMS7003.pdf) +-10ug accuracy, 100mA usage, .2mA standby, has a sleep pin but does not provide 3.3V out. ([Arduino driver],(https://www.espruino.com/PMS7003), [AQICN review](https://aqicn.org/sensor/pms5003-7003/), [Plantower product website](http://www.plantower.com/list/?6_1.html): 7003M model has fan+exhaust at the top, normal/P/I modals 90 opposed on the side?)
-* [Honeywell HPMA115SO-XXX](https://sensing.honeywell.com/honeywell-sensing-particulate-hpm-series-datasheet-32322550) +-15ug accuracy, 600mA surge voltage, 80mA usage, 20mA standby, has a 3.3V 100mA output pin.... ([Arduino driver](https://github.com/felixgalindo/HPMA115S0))
-
-Laboratory experiment comparisons:
-
-* https://uwspace.uwaterloo.ca/bitstream/handle/10012/12776/Tan_Ben.pdf?sequence=5&isAllowed=y
+No longer maintained/no response to API key request. 'Public' API key mentioned in the API docs works most of the time.
 
 ### display colors
 
@@ -146,7 +155,6 @@ u8g2 weather icon fonts: https://github.com/olikraus/u8g2/wiki/fntgrpiconic#open
 
 https://nucleoapp.com/icons/weather
 
-
 ## D1 Mini shields
 
  | RST | TX | PMS #1 RX (HW)
@@ -156,9 +164,3 @@ SD shield CLK | D5 | D2 | OLED shield SDA
 SD shield MISO | D6 | D3 | free
 SD shield MOSI | D7 | D4 | SD shield CS (/`Serial1` HW TX for debug msg)
 PMS #2 RX (SW) | D8 | GND |
-
-## PMS7003 libraries
-
-PMSSerial (`PMSerial.h`) takes a Serial object for HW and has SoftwareSerial 'built-in', is always in pass has an OLED example sketch and is also nicely blocking.
-
-PMS Library (`PMS.h`) takes a Serial object as argument and has methods for turning on/off passive mode but does not block...

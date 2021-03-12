@@ -9,7 +9,9 @@ boolean connectWifi() {
     return true;
   }
   Serial.print("Connecting to Wifi...");
-  if (WiFi.waitForConnectResult(10000) == WL_CONNECTED) {
+  WiFi.reconnect();
+  // TODO if status is 6 should wait LONGER! (while here, not if): https://github.com/esp8266/Arduino/issues/119#issuecomment-421530346
+  if (WiFi.waitForConnectResult(20000) == WL_CONNECTED) {
     Serial.println("connected.");
     return true;
   } else {
@@ -27,7 +29,7 @@ bool updateCurrentTime() {
   // update takes a couple of attempts sometimes...
   if (!ntp.update()) {
     if (!ntp.forceUpdate()) {
-      Serial.println("failed!");
+      Serial.println("failed!"); // stays 0 if it fails on first attempt after boot...
       return false;
     }
   }
@@ -38,12 +40,12 @@ bool updateCurrentTime() {
 }
 
 bool hasOneHourExpired(unsigned long since) {
-  if (since >= now) {
+  if (since >= now) { // >= so that if first NTP retrieval fails (all times are 0) all data is collected anyway
     // NTP seriously out of date...
     Serial.println("NTP seems seriously out of date, setting to value obtained from JSON...");
     now = since;
     return true;
   }
-  Serial.printf("Checking timestamp: data is %d minutes old.\n", now - since);
+  Serial.printf("Checking timestamp: data is %d minutes old.\n", (now - since) / 60);
   return since + 60 * 60 < now;
 }
