@@ -4,14 +4,27 @@ Several ESP8266/ESP32 Arduino projects for collecting and displaying air tempera
 
 Sub-projects and corresponding hardware:
 
-* `sloganstation` (aka `espweatherstation-mk3`) -- expanded version of `mk2` that uses a `NeoMatrix` display
+* `pm25fancontrol` wakes from deep sleep every 10-20 minutes to:
+  1. [X] check local (and outside) PM2.5 concentration readings and turn a MiIO smart plug on/off based on them (for controlling a HEPA filter fan)
+  2. [ ] check the local temperature of a MiIO humidifier and set its target humidity to meet a desired dew point
+  3. [ ] log the accumulated information (inside+outside PM2.5, local humidifier temperature+humidity, target humidity and filter state) to a network resource over HTTP
   * local
-    * NeoMatrix LED
-    * TEMT6000 for automatic dimming (see [AniMatrix](https://github.com/kevinstadler/AniMatrix))
-    * PIR sensor triggers screen wake (on time/sleep is fixed, not dependent on PIR going down)
-    * SHT30 shield for local temperature/humidity
+    * [X] Plantower PMS5003
+    * [X] 5050 RGB led (ground/pwm-controlled)
+    * ~~TEMT6000 for LED brightness dimming~~
   * network
-    * MiIO humidifier for reading temperature/humidity data and controlling device state
+    * [X] MiIO smart plug
+    * [ ] MiIO humidifier for reading temperature/humidity data and controlling device state
+    * [X] outside PM25 readings from network source over HTTP
+* `sloganstation` (aka `espweatherstation-mk3`) -- expanded version of `mk2` that uses a large `NeoMatrix` LED display
+  * local
+    * [X] PIR sensor triggers waking from light sleep via GPIO interrupt turns LED display on (on time/sleep is fixed, not dependent on PIR going down)
+    * [ ] regular waking up from timeout-based light sleep just checks time elapsed and polls network for new data
+    * [X] NeoMatrix LED
+    * [ ] [relay shield](https://www.wemos.cc/en/latest/d1_mini_shield/relay.html) (`D1/GPIO5`) turns off the 5V power supply to the NeoMatrix when no PIR activity has been registered for 30 minutes
+    * [ ] TEMT6000 for automatic dimming (see [AniMatrix](https://github.com/kevinstadler/AniMatrix))
+    * ~~SHT30 shield for local temperature/humidity~~
+  * network
     * [OpenAQ](https://openaq.org) JSON API for outdoor pollution data (raw)
     * AccuWeather/OpenWeatherMap for outdoor measurements + forecasting
 * `espweatherstation-mk2`
@@ -24,30 +37,21 @@ Sub-projects and corresponding hardware:
     * [AQICN](http://aqicn.org) JSON API for outdoor pollution (reconstructed)/temperature/humidity data
 * `espweatherstation-mk1`
   * original code, abandoned in favour of `mk2`
-* `pm25fancontrol` turns a MiIO smart plug on/off based on local (and outside) PM2.5 concentration readings
-  * local
-    * Plantower PMS5003
-    * RGB led (ground/pwm-controlled)
-    * TEMT6000 for LED brightness dimming?
-    * PIR sensor for waking (turning led on/off)
-  * network
-    * MiIO smart plug
-    * outside PM25 readings
 * `PIRtest` for testing/comparing PIR sensor sensitivity
   * local
     * SR-501 sensitivity/time/trigger-adjustable PIR sensor
     * ? PIR sensor
     * SR-602 PIR sensor
-    * `8x32` MAX7219 LED (https://www.makerguides.com/max7219-led-dot-matrix-display-arduino-tutorial/)
+    * `8x32` [MAX7219 LED](https://www.makerguides.com/max7219-led-dot-matrix-display-arduino-tutorial/) for PIR output status display
 * `PortablePM25Screen` reads and graphs PM2.5 concentrations on a 64x48 pixel OLED shield
-  * PMS5003 sensor (uses fu-hsi's `PMS.h`)
-  * D1 Mini [OLED 0.66" shield](https://www.wemos.cc/en/latest/d1_mini_shield/oled_0_66.html)
+  * [X] PMS5003 sensor (uses fu-hsi's `PMS.h`)
+  * [X] D1 Mini [OLED 0.66" shield](https://www.wemos.cc/en/latest/d1_mini_shield/oled_0_66.html)
     * this display was a pain to get running as most libraries are written for the 128x64 pixel version, `SSD1306Wire` library worked in the end but with funny pixel offsets
-* `pmserialx2` reads PM2.5 concentration from 2 connected sensors for comparison (at some point I also wrote them to SPIFFS for plotting+comparison, wonder where that code went...)
-  * 2 PMS5003 sensors (uses the always-blocking ``PMserial.h``)
-* [`srtNeoMatrix`](https://github.com/kevinstadler/srtNeoMatrix) (dedicated repository): displays subtitles from a .srt file read from SPIFFS on a NeoMatrix in real time
-  * NeoMatrix
-  * TEMT6000 for automatic dimming (see [AniMatrix](https://github.com/kevinstadler/AniMatrix))
+* [X] `pmserialx2` reads PM2.5 concentration from 2 connected sensors for comparison (at some point I also wrote them to SPIFFS for plotting+comparison, wonder where that code went...)
+  * [X] 2 PMS5003 sensors (uses the always-blocking ``PMserial.h``)
+* [X] [`srtNeoMatrix`](https://github.com/kevinstadler/srtNeoMatrix) (dedicated repository): displays subtitles from a .srt file read from SPIFFS on a NeoMatrix in real time
+  * [X] NeoMatrix
+  * [X] TEMT6000 for automatic dimming (see [AniMatrix](https://github.com/kevinstadler/AniMatrix))
 
 ## Hardware
 
