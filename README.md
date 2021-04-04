@@ -6,15 +6,15 @@ Sub-projects and corresponding hardware:
 
 * `pm25fancontrol` wakes from deep sleep every 10-20 minutes to:
   1. [X] check local (and outside) PM2.5 concentration readings and turn a MiIO smart plug on/off based on them (for controlling a HEPA filter fan)
-  2. [ ] check the local temperature of a MiIO humidifier and set its target humidity to meet a desired dew point
-  3. [ ] log the accumulated information (inside+outside PM2.5, local humidifier temperature+humidity, target humidity and filter state) to a network resource over HTTP
+  2. [X] check the local temperature of a MiIO humidifier and set its target humidity to meet a desired dew point
+  3. [X] log the accumulated information (inside+outside PM2.5, local humidifier temperature+humidity, target humidity and filter state) to a network resource over HTTP
   * local
     * [X] Plantower PMS5003
     * [X] 5050 RGB led (ground/pwm-controlled)
     * ~~TEMT6000 for LED brightness dimming~~
   * network
     * [X] MiIO smart plug
-    * [ ] MiIO humidifier for reading temperature/humidity data and controlling device state
+    * [X] MiIO humidifier for reading temperature/humidity data and controlling device state
     * [X] outside PM25 readings from network source over HTTP
 * `sloganstation` (aka `espweatherstation-mk3`) -- expanded version of `mk2` that uses a large `NeoMatrix` LED display
   * local
